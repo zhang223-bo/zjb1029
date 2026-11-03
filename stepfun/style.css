@@ -1,0 +1,164 @@
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --ok: #059669;
+  --warn: #b45309;
+  --danger: #dc2626;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 16px 20px 40px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+h1 { margin: 0 0 2px; font-size: 22px; }
+h2 { margin: 0 0 10px; font-size: 16px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+h3 { margin: 18px 0 8px; font-size: 14px; }
+.sub { margin: 0; color: var(--muted); font-size: 13px; }
+
+.badges { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #eef2f7;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.badge.webgpu { background: #ecfdf5; border-color: #a7f3d0; color: var(--ok); }
+.badge.wasm { background: #fffbeb; border-color: #fde68a; color: var(--warn); }
+.badge.pending { color: var(--muted); }
+.badge.error { background: #fef2f2; border-color: #fecaca; color: var(--danger); }
+
+main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.row { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.search-row input { flex: 1; }
+
+label { font-size: 13px; color: var(--muted); }
+.field-label { display: block; margin: 10px 0 4px; }
+
+input[type="text"], textarea, select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+textarea { width: 100%; resize: vertical; }
+input[type="text"] { min-width: 200px; }
+input[type="file"] { font-size: 12px; color: var(--muted); }
+
+button {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+}
+button:hover:not(:disabled) { filter: brightness(1.08); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.ghost { background: var(--accent-soft); color: var(--accent); }
+button.danger { color: var(--danger); }
+
+.progress {
+  height: 8px;
+  background: #eef2f7;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 6px 0 10px;
+}
+.progress > div {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  transition: width 0.2s;
+}
+.progress-label { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+.kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12.5px;
+  background: #f9fafb;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+.kv b { font-weight: 600; }
+
+.hits { margin: 10px 0; padding-left: 20px; }
+.hits li { margin-bottom: 8px; font-size: 13.5px; line-height: 1.55; }
+.hits .score { color: var(--accent); font-weight: 600; margin-right: 6px; }
+.hits .meta { color: var(--muted); font-size: 11.5px; display: block; }
+.hits mark { background: #fef08a; padding: 0 1px; }
+.hits .empty { color: var(--muted); list-style: none; margin-left: -20px; }
+
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.doc-list li {
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-list li:last-child { border-bottom: none; }
+.doc-list .hint, .hint { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+td:nth-child(n+2), th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+
+footer { margin-top: 14px; }
+footer p { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+.hidden { display: none !important; }

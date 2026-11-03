@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>迷你知识库 · 端侧向量化 + seekdb 混合检索</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>迷你知识库</h1>
+        <p class="sub">浏览器端侧向量化（Transformers.js）+ seekdb 向量与全文混合检索</p>
+      </div>
+      <div class="badges">
+        <span id="backend-badge" class="badge pending">推理后端：加载中…</span>
+        <span id="db-badge" class="badge">seekdb：连接中…</span>
+      </div>
+    </header>
+
+    <div id="model-progress-wrap" class="hidden">
+      <div class="progress-label" id="model-progress-label">准备下载模型…</div>
+      <div class="progress"><div id="model-progress-bar"></div></div>
+    </div>
+
+    <main>
+      <!-- ============ 左侧：知识库与导入 ============ -->
+      <section class="panel">
+        <h2>① 知识库 / 导入</h2>
+
+        <div class="row">
+          <label for="collection-select">当前集合</label>
+          <select id="collection-select"></select>
+          <button id="btn-new-collection" class="ghost" title="新建集合">＋新建</button>
+          <button id="btn-del-collection" class="ghost danger" title="删除当前集合">删除</button>
+        </div>
+
+        <div class="row">
+          <label for="batch-size">向量化批大小</label>
+          <select id="batch-size">
+            <option value="8">8</option>
+            <option value="16" selected>16</option>
+            <option value="32">32</option>
+            <option value="64">64</option>
+          </select>
+          <span class="hint">批处理越大吞吐越高，首块延迟略增</span>
+        </div>
+
+        <label class="field-label" for="import-text">粘贴文档（空行分段，每段一个知识条目）</label>
+        <textarea id="import-text" rows="8" placeholder="在此粘贴文本，多个条目之间用空行分隔…"></textarea>
+
+        <div class="row">
+          <input type="file" id="import-files" multiple accept=".txt,.md,.csv,.json" />
+        </div>
+
+        <div class="row">
+          <button id="btn-import" disabled>导入并向量化</button>
+          <button id="btn-sample" class="ghost" disabled>导入示例语料</button>
+          <button id="btn-clear-input" class="ghost">清空输入</button>
+        </div>
+
+        <div id="import-progress-wrap" class="hidden">
+          <div class="progress-label" id="import-progress-label">…</div>
+          <div class="progress"><div id="import-progress-bar"></div></div>
+        </div>
+
+        <div id="import-result" class="kv hidden"></div>
+
+        <h3>知识库内容 <span id="doc-count" class="hint"></span></h3>
+        <ul id="doc-list" class="doc-list"><li class="hint">加载中…</li></ul>
+      </section>
+
+      <!-- ============ 右侧：检索与性能 ============ -->
+      <section class="panel">
+        <h2>② 混合检索</h2>
+        <div class="row search-row">
+          <input id="query" type="text" placeholder="输入查询，如：seekdb 的混合检索是什么原理？" />
+          <button id="btn-search" disabled>检索</button>
+        </div>
+        <div class="row">
+          <label for="topk">Top-K</label>
+          <select id="topk">
+            <option>3</option>
+            <option value="5" selected>5</option>
+            <option>10</option>
+          </select>
+          <span class="hint">向量语义 + 全文关键词在 seekdb 库内 RRF 融合排序</span>
+        </div>
+
+        <div id="search-timing" class="kv hidden"></div>
+        <ol id="hits" class="hits"></ol>
+
+        <h2>③ 性能统计</h2>
+        <div id="perf-summary" class="kv"><span class="hint">暂无数据，导入或检索后生成</span></div>
+        <table id="perf-table" class="hidden">
+          <thead>
+            <tr><th>阶段</th><th>最近</th><th>中位数</th><th>样本数</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="row">
+          <button id="btn-reset-perf" class="ghost">清空统计</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p id="status">正在初始化…</p>
+    </footer>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
