@@ -97,7 +97,8 @@ public:
       const int64_t tablet_size,
       const int64_t hint_parallelism,
       ObArenaAllocator &allocator,
-      ObArray<blocksstable::ObDatumRange> &ranges);
+      ObArray<blocksstable::ObDatumRange> &ranges,
+      const bool fine_grained = false);
   static int init_batch_rows(
       const ObDDLTableSchema &ddl_table_schema,
       const int64_t batch_size,

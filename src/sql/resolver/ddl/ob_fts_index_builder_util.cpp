@@ -1056,7 +1056,7 @@ int ObFtsIndexBuilderUtil::decide_parallelism(
         // index build. The floor is capped so that the 3 concurrent aux table
         // tasks do not oversubscribe the machine.
         decided_parallelism = MAX(original_parallelism / 3,
-                                  MIN(4L, MAX(common::get_cpu_num() / 2, 1L)));
+                                  MIN(8L, MAX(common::get_cpu_num() / 2, 1L)));
         break;
       case share::schema::ObIndexType::INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL:
       case share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL:

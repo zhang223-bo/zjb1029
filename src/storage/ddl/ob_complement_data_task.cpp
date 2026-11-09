@@ -153,6 +153,10 @@ int ObComplementDataParam::init(const obcall::ObDDLLocalBuildArg &arg)
       } else {
         snapshot_version_ = arg.snapshot_version_;
         orig_schema_tablet_size_ = orig_table_schema->get_tablet_size();
+        // fulltext index aux tables: backfill runs tokenize + word-row expand
+        // per source row, ~50x the CPU cost per byte of a plain index backfill
+        is_fts_build_ = dest_table_schema->is_fts_index_aux()
+                        || dest_table_schema->is_fts_doc_word_aux();
       }
     }
   }
@@ -230,7 +234,7 @@ int ObComplementDataParam::split_task_ranges(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ObDDLStorageUtil::get_task_ranges(task_id, tablet_id, tablet_size, hint_parallelism, allocator_, ranges_))) {
+  } else if (OB_FAIL(ObDDLStorageUtil::get_task_ranges(task_id, tablet_id, tablet_size, hint_parallelism, allocator_, ranges_, is_fts_build_))) {
   } else {
     ObLS *ls = nullptr;
     ObTabletTableIterator iterator;

@@ -67,6 +67,7 @@ public:
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
     snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), data_format_version_(0),
     orig_schema_tablet_size_(0), user_parallelism_(0), concurrent_cnt_(0), ranges_(),
+    is_fts_build_(false),
     dest_lob_meta_tablet_id_(), allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE)
   {}
   ~ObComplementDataParam() { destroy(); }
@@ -145,6 +146,9 @@ public:
   int64_t data_format_version_;
   int64_t orig_schema_tablet_size_;
   int64_t user_parallelism_;  /* user input parallelism */
+  bool is_fts_build_; /* dest aux table is a fulltext index aux table, whose
+                         row generation is far more CPU intensive than a plain
+                         index backfill and needs finer-grained task ranges */
   /* complememt prepare task will initialize parallel task ranges */
   int64_t concurrent_cnt_; /* real complement tasks num */
   ObArray<blocksstable::ObDatumRange> ranges_;

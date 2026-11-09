@@ -439,7 +439,8 @@ int oceanbase::storage::ObDDLStorageUtil::get_task_ranges(
     const int64_t tablet_size,
     const int64_t hint_parallelism,
     common::ObArenaAllocator &allocator,
-    ObArray<blocksstable::ObDatumRange> &report_ranges)
+    ObArray<blocksstable::ObDatumRange> &report_ranges,
+    const bool fine_grained)
 {
   int ret = OB_SUCCESS;
   ObFreezeInfo frozen_status;
@@ -468,6 +469,17 @@ int oceanbase::storage::ObDDLStorageUtil::get_task_ranges(
     params.parallelism_ = hint_parallelism;
     if (tablet_size / 1024 > 0) {
       params.expected_task_load_kb_ = tablet_size / 1024;
+    }
+    if (fine_grained) {
+      // Fulltext index backfill runs tokenize + word-row expansion per source
+      // row, ~50x the CPU cost per byte of a plain index backfill. The default
+      // granularity (one task per whole tablet / 10MB min access size) turns
+      // small-but-expensive fulltext tablets into a single serial range, so
+      // the requested parallelism is never used. Use fine-grained ranges.
+      params.expected_task_load_kb_ = 256;
+      params.min_task_access_size_kb_ = 64;
+      params.min_task_count_per_thread_ = 1;
+      params.max_task_count_per_thread_ = 16;
     }
     if (OB_FAIL(ranges.push_back(range))) {
     } else if (OB_FAIL(tablet_service->get_multi_ranges_cost(tablet_id,
