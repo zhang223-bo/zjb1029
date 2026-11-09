@@ -66,8 +66,8 @@ public:
     dest_table_id_(common::OB_INVALID_ID), orig_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
     row_store_type_(common::ENCODING_ROW_STORE), orig_schema_version_(0), dest_schema_version_(0),
     snapshot_version_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0), data_format_version_(0),
-    orig_schema_tablet_size_(0), user_parallelism_(0), concurrent_cnt_(0), ranges_(),
-    is_fts_build_(false),
+    orig_schema_tablet_size_(0), user_parallelism_(0), is_fts_build_(false),
+    concurrent_cnt_(0), ranges_(),
     dest_lob_meta_tablet_id_(), allocator_("CompleteDataPar", OB_MALLOC_NORMAL_BLOCK_SIZE)
   {}
   ~ObComplementDataParam() { destroy(); }

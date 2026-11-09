@@ -472,14 +472,16 @@ int oceanbase::storage::ObDDLStorageUtil::get_task_ranges(
     }
     if (fine_grained) {
       // Fulltext index backfill runs tokenize + word-row expansion per source
-      // row, ~50x the CPU cost per byte of a plain index backfill. The default
-      // granularity (one task per whole tablet / 10MB min access size) turns
-      // small-but-expensive fulltext tablets into a single serial range, so
-      // the requested parallelism is never used. Use fine-grained ranges.
-      params.expected_task_load_kb_ = 256;
-      params.min_task_access_size_kb_ = 64;
+      // row, far more CPU intensive per byte than a plain index backfill. The
+      // default granularity (one task per whole tablet plus a multiple-MB min
+      // access size) collapses a small fulltext tablet into a single serial
+      // range, so the requested parallelism is never used. Use finer ranges,
+      // but keep the upper bound moderate so the number of concurrent
+      // complement-data slices stays bounded.
+      params.expected_task_load_kb_ = 1024;
+      params.min_task_access_size_kb_ = 256;
       params.min_task_count_per_thread_ = 1;
-      params.max_task_count_per_thread_ = 16;
+      params.max_task_count_per_thread_ = 4;
     }
     if (OB_FAIL(ranges.push_back(range))) {
     } else if (OB_FAIL(tablet_service->get_multi_ranges_cost(tablet_id,
