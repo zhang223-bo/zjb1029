@@ -19,6 +19,8 @@
 #include "src/storage/fts/ob_ik_ft_parser.h"
 
 #include "lib/charset/ob_charset.h"
+#include "lib/alloc/alloc_struct.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -40,6 +42,29 @@ namespace oceanbase
 {
 namespace storage
 {
+namespace
+{
+// thread-local holder of the reusable IK parser instance. The parser keeps
+// its dictionaries, segmenters and tokenize context alive across calls so
+// that the tokenize hot path no longer rebuilds them for every document.
+struct ObTLIIKParserHolder
+{
+  ObTLIIKParserHolder() : parser_(nullptr), in_use_(false) {}
+  ~ObTLIIKParserHolder()
+  {
+    if (OB_LIKELY(nullptr != parser_)) {
+      parser_->~ObIKFTParser();
+      parser_ = nullptr;
+    }
+  }
+  ObArenaAllocator allocator_{lib::ObMemAttr("IKTLParser")};
+  alignas(ObIKFTParser) char buf_[sizeof(ObIKFTParser)];
+  ObIKFTParser *parser_;
+  bool in_use_;
+};
+thread_local ObTLIIKParserHolder tls_ik_parser_;
+} // anonymous namespace
+
 int ObIKFTParser::init(const ObFTParserParam &param)
 {
   int ret = OB_SUCCESS;
@@ -48,6 +73,7 @@ int ObIKFTParser::init(const ObFTParserParam &param)
     ret = OB_INIT_TWICE;
   } else {
     coll_type_ = ObCollationType::CS_TYPE_INVALID;
+    reuse_cnt_ = 0;
     if (OB_ISNULL(param.cs_) || OB_ISNULL(param.cs_->name)) {
       ret = OB_INVALID_ARGUMENT;
     } else if (CS_TYPE_INVALID == (coll_type_ = ObCharset::collation_type(param.cs_->name))) {
@@ -65,6 +91,52 @@ int ObIKFTParser::init(const ObFTParserParam &param)
   }
 
   return ret;
+}
+
+int ObIKFTParser::reuse(const ObFTParserParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    // previous iteration did not finish cleanly, treat as a fresh parser
+    ret = init(param);
+  } else if (OB_ISNULL(param.cs_) || OB_ISNULL(param.cs_->name) || OB_ISNULL(ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    const ObCollationType coll_type = ObCharset::collation_type(param.cs_->name);
+    const bool is_smart = (param.ik_param_.mode_ == ObFTIKParam::Mode::SMART);
+    if (coll_type != coll_type_ || is_smart != ctx_->is_smart()
+        || param.ft_length_ <= 0
+        || ++reuse_cnt_ >= MAX_CONSECUTIVE_REUSE) {
+      // parser property changed or it is time to release the cached arena:
+      // rebuild everything with the exact same semantics as a fresh init()
+      reset();
+      ret = init(param);
+    } else {
+      reset_state();
+      if (OB_FAIL(ctx_->reinit(param.fulltext_, param.ft_length_))) {
+        // keep the same observable behavior as a fresh init() on bad input
+        int tmp_ret = ret;
+        ret = OB_SUCCESS;
+        reset();
+        if (OB_FAIL(init(param))) {
+        } else {
+          ret = tmp_ret;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObIKFTParser::reset_state()
+{
+  for (ObList<ObIIKProcessor *, ObIAllocator>::iterator iter = segmenters_.begin();
+       iter != segmenters_.end();
+       iter++) {
+    if (OB_NOT_NULL(*iter)) {
+      (*iter)->reset_state();
+    }
+  }
 }
 
 int ObIKFTParser::get_next_token(const char *&word,
@@ -178,9 +250,9 @@ int ObIKFTParser::process_next_batch()
     }
 
     if (OB_SUCC(ret) || OB_ITER_END == ret) {
-      ObIKArbitrator arb;
-      if (OB_FAIL(arb.process(*ctx_))) {
-      } else if (OB_FAIL(arb.output_result(*ctx_))) {
+      arb_.reuse();
+      if (OB_FAIL(arb_.process(*ctx_))) {
+      } else if (OB_FAIL(arb_.output_result(*ctx_))) {
       }
     } else {
       // Already logged.
@@ -198,15 +270,48 @@ int ObIKFTParserDesc::segment(ObFTParserParam *param, ObITokenIterator *&iter) c
   if (OB_ISNULL(param) || OB_UNLIKELY(!param->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(ObFTParseData::instance().get_dict_hub(hub))) {
-  } else if (OB_ISNULL(parser = OB_NEWx(ObIKFTParser, param->allocator_, *(param->allocator_), hub))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FAIL(parser->init(*param))) {
+  } else if (!tls_ik_parser_.in_use_) {
+    // hot path: reuse the thread-local parser instance, skipping
+    // init_dict/init_ctx/init_segmenter for every call
+    if (OB_ISNULL(tls_ik_parser_.parser_)) {
+      tls_ik_parser_.parser_ = new (tls_ik_parser_.buf_)
+          ObIKFTParser(tls_ik_parser_.allocator_, hub, true /* own_arena */);
+    }
+    parser = tls_ik_parser_.parser_;
+    ret = parser->reuse(*param);
+    if (OB_SUCC(ret)) {
+      tls_ik_parser_.in_use_ = true;
+      iter = parser;
+      return ret;
+    }
+    // reuse failed, fall back to the original per-call heap allocation.
+    // reuse() already leaves the tls parser in a clean state (or fully
+    // rebuilt), so it can serve future calls.
+    ret = OB_SUCCESS;
+    parser = nullptr;
+    if (OB_ISNULL(parser = OB_NEWx(ObIKFTParser, param->allocator_, *(param->allocator_), hub))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_FAIL(parser->init(*param))) {
+    } else {
+      iter = parser;
+      return ret;
+    }
+    if (OB_FAIL(ret)) {
+      OB_DELETEx(ObIKFTParser, param->allocator_, parser);
+    }
   } else {
-    iter = parser;
-  }
-
-  if (OB_FAIL(ret)) {
-    OB_DELETEx(ObIKFTParser, param->allocator_, parser);
+    // parser of this thread is already checked out (should not happen in
+    // practice since segment() calls are not nested), keep original behavior
+    if (OB_ISNULL(parser = OB_NEWx(ObIKFTParser, param->allocator_, *(param->allocator_), hub))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_FAIL(parser->init(*param))) {
+    } else {
+      iter = parser;
+      return ret;
+    }
+    if (OB_FAIL(ret)) {
+      OB_DELETEx(ObIKFTParser, param->allocator_, parser);
+    }
   }
 
   return ret;
@@ -215,8 +320,17 @@ int ObIKFTParserDesc::segment(ObFTParserParam *param, ObITokenIterator *&iter) c
 void ObIKFTParserDesc::free_token_iter(ObFTParserParam *param,
                                        ObITokenIterator *&iter) const
 {
-  iter->~ObITokenIterator();
-  param->allocator_->free(iter);
+  if (OB_NOT_NULL(iter)) {
+    if (OB_LIKELY(iter == tls_ik_parser_.parser_ && tls_ik_parser_.in_use_)) {
+      // return the thread-local parser for the next reuse
+      tls_ik_parser_.in_use_ = false;
+      iter = nullptr;
+    } else {
+      iter->~ObITokenIterator();
+      param->allocator_->free(iter);
+      iter = nullptr;
+    }
+  }
 }
 
 
@@ -377,6 +491,12 @@ void ObIKFTParser::reset()
   if (!OB_ISNULL(dict_stop_)) {
     dict_stop_->~ObIFTDict();
     allocator_.free(dict_stop_);
+  }
+
+  // for the thread-local instance that owns its arena, release the cached
+  // memory so long-running workers do not accumulate arena pages.
+  if (own_arena_) {
+    allocator_.reset();
   }
 
   is_inited_ = false;

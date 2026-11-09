@@ -76,6 +76,25 @@ int TokenizeContext::reset_resource()
   return OB_SUCCESS;
 }
 
+int TokenizeContext::reinit(const char *fulltext, const int64_t fulltext_len)
+{
+  int ret = OB_SUCCESS;
+  handle_size_ = 0;
+  cursor_ = 0;
+  next_char_len_ = 0;
+  next_char_type_ = ObFTCharUtil::CharType::USELESS;
+  token_list_.reset();
+  result_list_.reset();
+  fulltext_ = fulltext;
+  fulltext_len_ = fulltext_len;
+  if (OB_ISNULL(fulltext_) || fulltext_len_ <= 0) {
+    // keep the same behavior as init(): invalid input is rejected
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(prepare_next_char())) {
+  }
+  return ret;
+}
+
 int TokenizeContext::current_char(const char *&ch, uint8_t &char_len)
 {
   int ret = OB_SUCCESS;

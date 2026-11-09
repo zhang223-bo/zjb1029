@@ -36,10 +36,11 @@ ObSRTaaTIterImpl::ObSRTaaTIterImpl()
     cur_map_iter_(nullptr),
     cur_map_idx_(-1),
     next_clear_map_idx_(0),
-    cache_first_id_(),
-    are_chunk_stores_inited_(false),
-    are_chunk_stores_filled_(false),
-    set_datum_func_(nullptr)
+  cache_first_id_(),
+  are_chunk_stores_inited_(false),
+  are_chunk_stores_filled_(false),
+  skip_datum_stores_(false),
+  set_datum_func_(nullptr)
 {
 }
 
@@ -59,6 +60,7 @@ int ObSRTaaTIterImpl::init(
     dim_iter_ = &dim_iter;
     input_row_cnt_ = 0;
     output_row_cnt_ = 0;
+    skip_datum_stores_ = !iter_param_->need_project_relevance();
     if (iter_param_->id_proj_expr_->datum_meta_.type_ == common::ObUInt64Type) {
       set_datum_func_ = ObISparseRetrievalMergeIter::set_datum_int;
     } else {
@@ -103,6 +105,7 @@ void ObSRTaaTIterImpl::reuse(const bool switch_tablet)
   cache_first_id_.reset();
   are_chunk_stores_inited_ = false;
   are_chunk_stores_filled_ = false;
+  skip_datum_stores_ = false;
   input_row_cnt_ = 0;
   output_row_cnt_ = 0;
 }
@@ -194,23 +197,24 @@ int ObSRTaaTIterImpl::init_chunk_stores()
     } else {
       hash_maps_ = static_cast<ObSRTaaTHashMap **>(buf);
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(buf = iter_allocator_->alloc(sizeof(query::ObSpillRowStore *) * partition_cnt_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      datum_stores_ = static_cast<query::ObSpillRowStore **>(buf);
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(buf = iter_allocator_->alloc(sizeof(query::ObSpillRowStoreIterator *) * partition_cnt_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      datum_store_iters_ = static_cast<query::ObSpillRowStoreIterator **>(buf);
-    }
-    if (OB_FAIL(ret) || !iter_param_->id_proj_expr_->is_batch_result()) {
-    } else if (OB_ISNULL(buf = iter_allocator_->alloc(sizeof(sql::ObBitVector *) * partition_cnt_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      skips_ = static_cast<sql::ObBitVector **>(buf);
+    if (OB_SUCC(ret) && !skip_datum_stores_) {
+      if (OB_ISNULL(buf = iter_allocator_->alloc(sizeof(query::ObSpillRowStore *) * partition_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        datum_stores_ = static_cast<query::ObSpillRowStore **>(buf);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(buf = iter_allocator_->alloc(sizeof(query::ObSpillRowStoreIterator *) * partition_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        datum_store_iters_ = static_cast<query::ObSpillRowStoreIterator **>(buf);
+      }
+      if (OB_FAIL(ret) || !iter_param_->id_proj_expr_->is_batch_result()) {
+      } else if (OB_ISNULL(buf = iter_allocator_->alloc(sizeof(sql::ObBitVector *) * partition_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        skips_ = static_cast<sql::ObBitVector **>(buf);
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_cnt_; ++i) {
       if (OB_FAIL(ret)) {
@@ -223,15 +227,15 @@ int ObSRTaaTIterImpl::init_chunk_stores()
           hash_maps_[i] = hash_map;
         }
       }
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) || skip_datum_stores_) {
       } else if (OB_FAIL(query::create_spill_row_store(
           *iter_allocator_, datum_stores_[i]))) {
       }
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) || skip_datum_stores_) {
       } else if (OB_FAIL(query::create_spill_row_store_iterator(
           *iter_allocator_, datum_store_iters_[i]))) {
       }
-      if (OB_FAIL(ret) || !iter_param_->id_proj_expr_->is_batch_result()) {
+      if (OB_FAIL(ret) || skip_datum_stores_ || !iter_param_->id_proj_expr_->is_batch_result()) {
       } else if (OB_ISNULL(buf = iter_allocator_->alloc(sql::ObBitVector::memory_size(capacity)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
@@ -263,6 +267,66 @@ int ObSRTaaTIterImpl::fill_chunk_stores()
     ObEvalCtx *eval_ctx = iter_param_->eval_ctx_;
     int64_t capacity = iter_param_->max_batch_size_;
     int64_t total_count = 0;
+
+    if (skip_datum_stores_) {
+      // fast path: no relevance score is needed, deduplicate docids directly
+      // into the in-memory hash maps without the spill row store detour.
+      const bool is_batch = iter_param_->id_proj_expr_->is_batch_result();
+      for (int64_t dim_idx = 0; OB_SUCC(ret); ) {
+        int64_t subtotal_count = 0;
+        while (OB_SUCC(ret)) {
+          int64_t count = 0;
+          if (is_batch) {
+            if (OB_FAIL(dim_iter_->get_next_batch(capacity, count))) {
+              if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              } else if (OB_LIKELY(count > 0)) {
+                ret = OB_SUCCESS;
+              }
+            }
+          } else if (OB_FAIL(dim_iter_->get_next_row())) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            } else {
+              count = 1;
+            }
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+            const ObDatum &id_datum = is_batch
+                ? iter_param_->id_proj_expr_->locate_expr_datum(*eval_ctx, i)
+                : iter_param_->id_proj_expr_->locate_expr_datum(*eval_ctx);
+            if (OB_UNLIKELY(id_datum.is_null()) || OB_ISNULL(id_datum.ptr_)) {
+              ret = OB_ERR_UNEXPECTED;
+            } else {
+              uint64_t partition = murmurhash(id_datum.ptr_, id_datum.len_, 0) % partition_cnt_;
+              ObDocIdExt id;
+              if (OB_FAIL(id.from_datum(id_datum))) {
+              } else {
+                int tmp_ret = hash_maps_[partition]->set_refactored(id, 1.0, 0 /* overwrite */);
+                if (OB_UNLIKELY(OB_SUCCESS != tmp_ret && OB_HASH_EXIST != tmp_ret)) {
+                  ret = tmp_ret;
+                } else {
+                  ++subtotal_count;
+                }
+              }
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+        if (OB_SUCC(ret)) {
+          total_count += subtotal_count;
+          eval_ctx->reuse(eval_ctx->get_batch_size());
+          if (OB_FAIL(update_dim_iter(++dim_idx))) {
+            if (OB_ITER_END != ret) {
+            }
+          }
+        }
+      }
+      if (OB_LIKELY(OB_SUCC(ret))) {
+        are_chunk_stores_filled_ = true;
+      }
+      return ret;
+    }
 
     for (int64_t dim_idx = 0; OB_SUCC(ret); ) {
       int64_t subtotal_count = 0;
@@ -367,14 +431,16 @@ int ObSRTaaTIterImpl::load_next_hash_map()
   ++cur_map_idx_;
   if (cur_map_idx_ >= partition_cnt_) {
     ret = OB_ITER_END;
-  } else if (OB_UNLIKELY(hash_maps_[cur_map_idx_]->size() != 0)) {
+  } else if (OB_UNLIKELY(!skip_datum_stores_ && hash_maps_[cur_map_idx_]->size() != 0)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_ISNULL(iter_param_->id_proj_expr_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
     ObSRTaaTHashMap *map = hash_maps_[cur_map_idx_];
-    query::ObSpillRowStoreIterator *store_iter = datum_store_iters_[cur_map_idx_];
+    query::ObSpillRowStoreIterator *store_iter =
+        skip_datum_stores_ ? nullptr : datum_store_iters_[cur_map_idx_];
 
+    if (!skip_datum_stores_) {
     ObSEArray<ObExpr *, 2> exprs;
     if (OB_FAIL(exprs.push_back(iter_param_->id_proj_expr_))) {
     } else if (iter_param_->need_project_relevance()
@@ -413,6 +479,7 @@ int ObSRTaaTIterImpl::load_next_hash_map()
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
+    } // end of !skip_datum_stores_
   }
   if (OB_SUCC(ret)) {
     ObSRTaaTHashMap::iterator map_iter = hash_maps_[cur_map_idx_]->begin();

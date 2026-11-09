@@ -41,6 +41,10 @@ public:
   int init();
   int reset_resource();
 
+  // rebind the context to a new fulltext without recreating the object,
+  // used by parser instance reuse on the tokenize hot path.
+  int reinit(const char *fulltext, const int64_t fulltext_len);
+
   int get_next_token(const char *&word, int64_t &word_len, int64_t &offset, int64_t &char_cnt);
 
   int compound(ObIKToken &result);
@@ -108,6 +112,11 @@ public:
                          const uint8_t char_len,
                          const ObFTCharUtil::CharType type)
       = 0;
+
+  // reset internal cross-batch state, must leave the processor ready to
+  // tokenize a brand new document. Called before a cached parser instance
+  // is reused for another fulltext.
+  virtual void reset_state() {}
 };
 
 } // namespace storage

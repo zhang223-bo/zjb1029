@@ -198,5 +198,11 @@ void ObIKQuantifierProcessor::reset()
   quan_char_cnt_ = 0;
 }
 
+void ObIKQuantifierProcessor::reset_state()
+{
+  reset();
+  count_hits_.clear();
+}
+
 } //  namespace storage
 } //  namespace oceanbase

@@ -44,6 +44,13 @@ int ObIKLetterProcessor::do_process(TokenizeContext &ctx,
   return ret;
 }
 
+void ObIKLetterProcessor::reset_state()
+{
+  reset_english_state();
+  reset_arabic_state();
+  reset_mix_state();
+}
+
 int ObIKLetterProcessor::process_english_letter(TokenizeContext &ctx,
                                                 const char *ch,
                                                 const uint8_t char_len,

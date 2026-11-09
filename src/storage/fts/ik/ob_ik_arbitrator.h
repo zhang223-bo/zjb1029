@@ -38,6 +38,17 @@ public:
 
   int output_result(TokenizeContext &ctx);
 
+  // release per-batch state (chain hash map + arena) so that the arbitrator
+  // instance can be reused for the next batch instead of being rebuilt.
+  void reuse()
+  {
+    if (OB_LIKELY(chains_created_)) {
+      chains_.destroy();
+      chains_created_ = false;
+    }
+    alloc_.reset();
+  }
+
 private:
   int prepare(TokenizeContext &ctx);
 
@@ -62,6 +73,7 @@ private:
 private:
   ObArenaAllocator alloc_;
   hash::ObHashMap<int64_t, ObIKTokenChain *> chains_;
+  bool chains_created_ = false;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIKArbitrator);

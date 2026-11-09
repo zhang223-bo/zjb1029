@@ -22,6 +22,7 @@
 #include "data_plane/fts/dict/ob_gen_dic_loader.h"
 #include "data_plane/fts/dict/ob_dic_lock_service.h"
 #include "share/ob_server_struct.h"
+#include "lib/utility/utility.h"
 #include "data_plane/fts/ob_fts_parser_helper.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_utils.h"
@@ -1047,7 +1048,15 @@ int ObFtsIndexBuilderUtil::decide_parallelism(
       case share::schema::ObIndexType::INDEX_TYPE_DOC_ID_ROWKEY_LOCAL:
       case share::schema::ObIndexType::INDEX_TYPE_FTS_INDEX_LOCAL:
       case share::schema::ObIndexType::INDEX_TYPE_FTS_DOC_WORD_LOCAL:
-        decided_parallelism = MAX(original_parallelism / 3, 1L);
+        // FTS aux index build used to be strictly throttled to original/3, which
+        // collapses to a single thread when the DDL statement has no PARALLEL
+        // hint (the common case). The build is scan + tokenize + write and is
+        // safe to run in parallel (the ddl infra splits tablet ranges), so we
+        // keep a small floor based on cpu count to avoid serial full-text
+        // index build. The floor is capped so that the 3 concurrent aux table
+        // tasks do not oversubscribe the machine.
+        decided_parallelism = MAX(original_parallelism / 3,
+                                  MIN(4L, MAX(common::get_cpu_num() / 2, 1L)));
         break;
       case share::schema::ObIndexType::INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL:
       case share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL:

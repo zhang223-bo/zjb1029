@@ -74,9 +74,16 @@ void ObStopWordChecker::destroy()
 int ObStopWordChecker::check_stopword(const ObFTWord &word, bool &is_stopword)
 {
   int ret = OB_SUCCESS;
-  
-  
-  common::ObArenaAllocator allocator(lib::ObMemAttr("ChkStopWord"));
+
+
+  // this checker is a global singleton shared by all worker threads: use a
+  // thread-local scratch allocator instead of constructing (and possibly
+  // page-allocating) a fresh arena for every single word on the hot path.
+  // reset_remain_one_page keeps one page cached per thread.
+  static thread_local common::ObArenaAllocator tls_scratch_allocator(
+      lib::ObMemAttr("ChkStopWord"));
+  tls_scratch_allocator.reset_remain_one_page();
+  common::ObArenaAllocator &allocator = tls_scratch_allocator;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(word.empty())) {

@@ -35,6 +35,12 @@ public:
                  const uint8_t char_len,
                  const ObFTCharUtil::CharType type) override;
 
+  void reset_state() override
+  {
+    low_offset_ = -1;
+    high_offset_ = -1;
+  }
+
 private:
   void reset()
   {

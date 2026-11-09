@@ -304,7 +304,14 @@ int ObIKArbitrator::prepare(TokenizeContext &ctx)
 
   int cal_bucket_num = MAX(ctx.fulltext_len() / 100, 10);
   cal_bucket_num = MIN(cal_bucket_num, 100);
+  if (OB_UNLIKELY(chains_created_)) {
+    // defensive: destroy leftover state from a previous batch
+    chains_.destroy();
+    chains_created_ = false;
+  }
   if (OB_FAIL(chains_.create(cal_bucket_num, ObMemAttr("IK ARBITRATE")))) {
+  } else {
+    chains_created_ = true;
   }
   return ret;
 }
@@ -326,6 +333,7 @@ int ObIKArbitrator::add_chain(ObIKTokenChain *chain)
 ObIKArbitrator::~ObIKArbitrator()
 {
   chains_.destroy();
+  chains_created_ = false;
   alloc_.reset();
 }
 } // namespace storage

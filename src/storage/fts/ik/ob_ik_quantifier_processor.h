@@ -39,7 +39,9 @@ public:
   int do_process(TokenizeContext &ctx,
                  const char *ch,
                  const uint8_t char_len,
-                 const ObFTCharUtil::CharType type);
+                 const ObFTCharUtil::CharType type) override;
+
+  void reset_state() override;
 
 private:
   int process_CN_number(TokenizeContext &ctx,

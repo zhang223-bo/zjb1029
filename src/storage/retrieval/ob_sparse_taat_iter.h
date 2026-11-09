@@ -66,6 +66,10 @@ protected:
   ObDocIdExt cache_first_id_;
   bool are_chunk_stores_inited_;
   bool are_chunk_stores_filled_;
+  // true when no relevance score is needed: docids are deduplicated directly
+  // into the in-memory hash maps during fill, skipping the spill row stores
+  // (write + read back) entirely.
+  bool skip_datum_stores_;
   void (*set_datum_func_)(ObDatum &, const ObDocIdExt &);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSRTaaTIterImpl);

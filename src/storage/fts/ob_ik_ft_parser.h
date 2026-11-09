@@ -21,6 +21,7 @@
 #include "storage/fts/dict/ob_ft_cache_container.h"
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
+#include "storage/fts/ik/ob_ik_arbitrator.h"
 #include "storage/fts/ik/ob_ik_processor.h"
 #include "data_plane/fts/ob_fts_parser.h"
 
@@ -34,9 +35,11 @@ class ObFTDictHub;
 class ObIKFTParser final : public ObITokenIterator
 {
 public:
-  ObIKFTParser(ObIAllocator &allocator, ObFTDictHub *hub)
+  ObIKFTParser(ObIAllocator &allocator, ObFTDictHub *hub, const bool own_arena = false)
       : allocator_(allocator),
         is_inited_(false),
+        own_arena_(own_arena),
+        reuse_cnt_(0),
         coll_type_(ObCollationType::CS_TYPE_INVALID),
         ctx_(nullptr),
         hub_(hub),
@@ -46,13 +49,21 @@ public:
         cache_stop_(allocator),
         dict_main_(nullptr),
         dict_quan_(nullptr),
-        dict_stop_(nullptr)
+        dict_stop_(nullptr),
+        arb_()
   {
   }
 
   virtual ~ObIKFTParser() { reset(); }
 
   int init(const ObFTParserParam &param);
+
+  // reuse the parser (dicts / segmenters / context) for another fulltext,
+  // avoiding the per-call init_dict/init_ctx/init_segmenter cost. If the
+  // parser property (collation / mode) changed, fall back to full re-init.
+  int reuse(const ObFTParserParam &param);
+
+  bool is_inited() const { return is_inited_; }
 
   int get_next_token(const char *&word,
                      int64_t &word_len,
@@ -82,6 +93,10 @@ private:
 
   void reset();
 
+  // reset cross-batch state of all segmenters (defensive, in case the
+  // previous iteration was aborted mid-document).
+  void reset_state();
+
   bool should_read_newest_table() const;
 
   int build_dict_from_cache(const ObFTDictDesc &desc,
@@ -90,8 +105,15 @@ private:
 
 private:
   static constexpr int SEGMENT_LIMIT = 1000;
+  // after this many light-weight reuses, rebuild the parser once to release
+  // the memory cached in the internal arena allocator.
+  static constexpr int64_t MAX_CONSECUTIVE_REUSE = 256;
   ObIAllocator &allocator_;
   bool is_inited_;
+  // true if allocator_ is owned by this parser (thread-local instance) and
+  // safe to reset when rebuilding.
+  bool own_arena_;
+  int64_t reuse_cnt_;
 
   ObCollationType coll_type_;
   TokenizeContext *ctx_;
@@ -106,6 +128,9 @@ private:
   ObIFTDict *dict_main_;
   ObIFTDict *dict_quan_;
   ObIFTDict *dict_stop_;
+
+  // arbitrator reused across batches to avoid per-batch hash/chain rebuild
+  ObIKArbitrator arb_;
 
   DISABLE_COPY_ASSIGN(ObIKFTParser);
 };
