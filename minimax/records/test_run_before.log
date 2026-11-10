@@ -1,0 +1,32 @@
+command: PYTHONPATH=snapshots/before python -m unittest discover -s tests -p test_items.py -v
+code_version: items-before-1
+test_filter_by_status (test_items.ListItemsTest.test_filter_by_status) ... FAIL
+test_list_sorted_by_time (test_items.ListItemsTest.test_list_sorted_by_time) ... ok
+
+======================================================================
+FAIL: test_filter_by_status (test_items.ListItemsTest.test_filter_by_status)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\24937\WorkBuddy\2026-11-10-16-16-22\minimax\tests\test_items.py", line 14, in test_filter_by_status
+    self.assertEqual([item["id"] for item in result], [3, 1])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [2, 3, 1] != [3, 1]
+
+First differing element 0:
+2
+3
+
+First list contains 1 additional elements.
+First extra element 2:
+1
+
+- [2, 3, 1]
+?  ---
+
++ [3, 1]
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (failures=1)
+exit_code: 1

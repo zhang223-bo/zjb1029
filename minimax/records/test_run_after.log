@@ -1,0 +1,10 @@
+command: PYTHONPATH=src python -m unittest discover -s tests -p test_items.py -v
+code_version: items-after-1
+test_filter_by_status (test_items.ListItemsTest.test_filter_by_status) ... ok
+test_list_sorted_by_time (test_items.ListItemsTest.test_list_sorted_by_time) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+OK
+exit_code: 0
