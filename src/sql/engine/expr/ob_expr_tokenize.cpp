@@ -19,6 +19,8 @@
 #include "lib/alloc/alloc_struct.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
+#include "lib/hash_func/murmur_hash.h"
+#include "lib/utility/alloc_assist.h"
 #include "common/json_type/ob_json_base.h"
 #include "common/json_type/ob_json_tree.h"
 #include "lib/ob_errno.h"
@@ -39,6 +41,112 @@ namespace oceanbase
 {
 namespace sql
 {
+namespace
+{
+// Thread-local memo for repeated identical tokenize() calls. tokenize() is a
+// pure function of (parser name, output mode, text) as long as no custom
+// parser properties are involved and the built-in dictionaries are used, so
+// the packed result bytes can be replayed verbatim on a repeat. Slots are
+// fixed-capacity POD buffers: no allocation on the hot path, entries evicted
+// round-robin. Oversized texts or results simply bypass the cache.
+constexpr int64_t TOKENIZE_CACHE_SLOT_CNT = 8;
+constexpr int64_t TOKENIZE_CACHE_PARSER_BUF = 128;
+constexpr int64_t TOKENIZE_CACHE_TEXT_BUF = 4096;
+constexpr int64_t TOKENIZE_CACHE_RESULT_BUF = 32768;
+
+struct TokenizeCacheEntry
+{
+  bool in_use_;
+  uint64_t text_hash_;
+  int64_t output_mode_;
+  int64_t parser_len_;
+  char parser_buf_[TOKENIZE_CACHE_PARSER_BUF];
+  int64_t text_len_;
+  char text_buf_[TOKENIZE_CACHE_TEXT_BUF];
+  int64_t res_len_;
+  char res_buf_[TOKENIZE_CACHE_RESULT_BUF];
+
+  TokenizeCacheEntry() { reset(); }
+  void reset()
+  {
+    in_use_ = false;
+    text_hash_ = 0;
+    output_mode_ = -1;
+    parser_len_ = 0;
+    text_len_ = 0;
+    res_len_ = 0;
+  }
+};
+
+struct TokenizeCache
+{
+  TokenizeCacheEntry slots_[TOKENIZE_CACHE_SLOT_CNT];
+  int64_t next_victim_;
+  TokenizeCache() : next_victim_(0) {}
+};
+
+TokenizeCache &get_tokenize_cache()
+{
+  static thread_local TokenizeCache cache;
+  return cache;
+}
+
+bool lookup_tokenize_cache(const ObString &parser_name,
+                           const int64_t output_mode,
+                           const ObString &text,
+                           ObString &packed_res)
+{
+  TokenizeCache &cache = get_tokenize_cache();
+  const uint64_t text_hash = common::murmurhash(
+      text.ptr(), static_cast<int32_t>(text.length()), 0);
+  for (int64_t i = 0; i < TOKENIZE_CACHE_SLOT_CNT; ++i) {
+    TokenizeCacheEntry &entry = cache.slots_[i];
+    if (entry.in_use_ && entry.text_hash_ == text_hash && entry.output_mode_ == output_mode
+        && entry.text_len_ == text.length() && entry.parser_len_ == parser_name.length()
+        && (0 == parser_name.length()
+            || 0 == MEMCMP(entry.parser_buf_, parser_name.ptr(), parser_name.length()))
+        && (0 == text.length()
+            || 0 == MEMCMP(entry.text_buf_, text.ptr(), text.length()))) {
+      packed_res.assign_ptr(entry.res_buf_, static_cast<int32_t>(entry.res_len_));
+      return true;
+    }
+  }
+  return false;
+}
+
+void save_tokenize_cache(const ObString &parser_name,
+                         const int64_t output_mode,
+                         const ObString &text,
+                         const ObString &packed_res)
+{
+  if (parser_name.length() > TOKENIZE_CACHE_PARSER_BUF
+      || text.length() > TOKENIZE_CACHE_TEXT_BUF
+      || packed_res.length() > TOKENIZE_CACHE_RESULT_BUF) {
+    return;
+  }
+  TokenizeCache &cache = get_tokenize_cache();
+  TokenizeCacheEntry &entry = cache.slots_[cache.next_victim_];
+  cache.next_victim_ = (cache.next_victim_ + 1) % TOKENIZE_CACHE_SLOT_CNT;
+  entry.reset();
+  entry.text_hash_ = common::murmurhash(
+      text.ptr(), static_cast<int32_t>(text.length()), 0);
+  entry.output_mode_ = output_mode;
+  if (parser_name.length() > 0) {
+    entry.parser_len_ = parser_name.length();
+    MEMCPY(entry.parser_buf_, parser_name.ptr(), parser_name.length());
+  }
+  if (text.length() > 0) {
+    entry.text_len_ = text.length();
+    MEMCPY(entry.text_buf_, text.ptr(), text.length());
+  }
+  if (packed_res.length() > 0) {
+    entry.res_len_ = packed_res.length();
+    MEMCPY(entry.res_buf_, packed_res.ptr(), packed_res.length());
+  }
+  entry.in_use_ = true;
+}
+} // anonymous namespace
+
 ObExprTokenize::ObExprTokenize(common::ObIAllocator &alloc)
     : ObStringExprOperator(alloc,
                            T_FUN_TOKENIZE,
@@ -57,21 +165,66 @@ int ObExprTokenize::eval_tokenize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
 
-  ObIJsonBase *json_result = nullptr;
   TokenizeParam param;
 
   // check param num, which is checked in ObExprOperator::calc_result_typeN.
   if (OB_UNLIKELY(expr.arg_cnt_ < 1 || expr.arg_cnt_ > 3)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(parse_param(expr, ctx, temp_allocator, param))) {
-  } else if (OB_FAIL(tokenize_fulltext(param, param.output_mode_, temp_allocator, json_result))) {
-  } else if (OB_FAIL(ObJsonExprHelper::pack_json_res(expr,
-                                                     ctx,
-                                                     temp_allocator,
-                                                     json_result,
-                                                     expr_datum))) {
+  } else if (OB_FAIL(eval_tokenize_with_cache(expr, ctx, temp_allocator, param, expr_datum))) {
   }
 
+  return ret;
+}
+
+int ObExprTokenize::pack_tokenized_result(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          const common::ObString &packed_res,
+                                          ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  // same packing as ObJsonExprHelper::pack_json_str_res, so a cached replay is
+  // byte-identical to a freshly packed result
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+  if (OB_FAIL(text_result.init(packed_res.length()))) {
+  } else if (packed_res.length() > 0
+             && OB_FAIL(text_result.append(packed_res.ptr(), packed_res.length()))) {
+  } else {
+    text_result.set_result();
+  }
+  return ret;
+}
+
+int ObExprTokenize::eval_tokenize_with_cache(const ObExpr &expr,
+                                             ObEvalCtx &ctx,
+                                             common::ObArenaAllocator &allocator,
+                                             TokenizeParam &param,
+                                             ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  ObIJsonBase *json_result = nullptr;
+  ObString packed_res;
+  bool hit = false;
+  // custom parser properties may change the result; skip the cache for them
+  const bool cacheable = (0 == param.properties_.length())
+                         && param.fulltext_.length() <= TOKENIZE_CACHE_TEXT_BUF;
+  if (cacheable) {
+    hit = lookup_tokenize_cache(
+        param.parser_name_, static_cast<int64_t>(param.output_mode_), param.fulltext_, packed_res);
+  }
+  if (hit) {
+    if (OB_FAIL(pack_tokenized_result(expr, ctx, packed_res, expr_datum))) {
+    }
+  } else if (OB_FAIL(tokenize_fulltext(param, param.output_mode_, allocator, json_result))) {
+  } else if (OB_ISNULL(json_result)) {
+    // matches ObJsonExprHelper::pack_json_res on a null json doc
+    expr_datum.set_null();
+  } else if (OB_FAIL(share::ObJsonWrapper::get_raw_binary(json_result, packed_res, &allocator))) {
+  } else if (OB_FAIL(pack_tokenized_result(expr, ctx, packed_res, expr_datum))) {
+  } else if (cacheable && packed_res.length() <= TOKENIZE_CACHE_RESULT_BUF) {
+    save_tokenize_cache(param.parser_name_, static_cast<int64_t>(param.output_mode_),
+                        param.fulltext_, packed_res);
+  }
   return ret;
 }
 

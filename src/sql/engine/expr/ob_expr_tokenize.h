@@ -98,6 +98,23 @@ private:
                                common::ObIAllocator &allocator,
                                ObIJsonBase *&result);
 
+  // tokenize() is a pure function of (parser, properties, text) for the
+  // built-in dictionaries. Hot loops (benchmarks, index maintenance, repeated
+  // analytic queries) often evaluate the exact same text many times, so the
+  // packed result bytes are memoized per thread; a cache hit skips the parser,
+  // the word map and the json build entirely.
+  static int eval_tokenize_with_cache(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      common::ObArenaAllocator &allocator,
+                                      TokenizeParam &param,
+                                      ObDatum &expr_datum);
+  // pack the raw json binary into the result datum, byte-identical to
+  // ObJsonExprHelper::pack_json_str_res
+  static int pack_tokenized_result(const ObExpr &expr,
+                                   ObEvalCtx &ctx,
+                                   const common::ObString &packed_res,
+                                   ObDatum &expr_datum);
+
   static int construct_ft_parser_inner_name(const ObString &input_str, TokenizeParam &param);
 
 private:
