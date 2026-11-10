@@ -20,10 +20,6 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/hash_func/murmur_hash.h"
-#include "lib/utility/alloc_assist.h"
-
-#include <stdlib.h>
-#include <string.h>
 #include "common/json_type/ob_json_base.h"
 #include "common/json_type/ob_json_tree.h"
 #include "lib/ob_errno.h"
@@ -105,15 +101,15 @@ bool lookup_tokenize_cache(const ObString &parser_name,
       text.ptr(), static_cast<int32_t>(text.length()), 0);
   for (int64_t i = 0; i < TOKENIZE_CACHE_SLOT_CNT; ++i) {
     TokenizeCacheEntry &entry = cache.slots_[i];
-    if (entry.in_use_ && entry.text_hash_ == text_hash && entry.output_mode_ == output_mode
-        && entry.text_len_ == text.length() && entry.parser_len_ == parser_name.length()
-        && (0 == parser_name.length()
-            || 0 == MEMCMP(entry.parser_buf_, parser_name.ptr(), parser_name.length()))
-        && (0 == text.length()
-            || 0 == MEMCMP(entry.text_buf_, text.ptr(), text.length()))) {
-      packed_res.assign_ptr(entry.res_buf_, static_cast<int32_t>(entry.res_len_));
-      return true;
-    }
+  if (entry.in_use_ && entry.text_hash_ == text_hash && entry.output_mode_ == output_mode
+      && entry.text_len_ == text.length() && entry.parser_len_ == parser_name.length()
+      && (0 == parser_name.length()
+          || 0 == memcmp(entry.parser_buf_, parser_name.ptr(), parser_name.length()))
+      && (0 == text.length()
+          || 0 == memcmp(entry.text_buf_, text.ptr(), text.length()))) {
+    packed_res.assign_ptr(entry.res_buf_, static_cast<int32_t>(entry.res_len_));
+    return true;
+  }
   }
   return false;
 }
@@ -140,15 +136,15 @@ void save_tokenize_cache(const ObString &parser_name,
   entry.output_mode_ = output_mode;
   if (parser_name.length() > 0) {
     entry.parser_len_ = parser_name.length();
-    MEMCPY(entry.parser_buf_, parser_name.ptr(), parser_name.length());
+    memcpy(entry.parser_buf_, parser_name.ptr(), parser_name.length());
   }
   if (text.length() > 0) {
     entry.text_len_ = text.length();
-    MEMCPY(entry.text_buf_, text.ptr(), text.length());
+    memcpy(entry.text_buf_, text.ptr(), text.length());
   }
   if (packed_res.length() > 0) {
     entry.res_len_ = packed_res.length();
-    MEMCPY(entry.res_buf_, packed_res.ptr(), packed_res.length());
+    memcpy(entry.res_buf_, packed_res.ptr(), packed_res.length());
   }
   entry.in_use_ = true;
 }
@@ -184,24 +180,6 @@ int ObExprTokenize::eval_tokenize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   return ret;
 }
 
-int ObExprTokenize::pack_tokenized_result(const ObExpr &expr,
-                                          ObEvalCtx &ctx,
-                                          const common::ObString &packed_res,
-                                          ObDatum &expr_datum)
-{
-  int ret = OB_SUCCESS;
-  // same packing as ObJsonExprHelper::pack_json_str_res, so a cached replay is
-  // byte-identical to a freshly packed result
-  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
-  if (OB_FAIL(text_result.init(packed_res.length()))) {
-  } else if (packed_res.length() > 0
-             && OB_FAIL(text_result.append(packed_res.ptr(), packed_res.length()))) {
-  } else {
-    text_result.set_result();
-  }
-  return ret;
-}
-
 int ObExprTokenize::eval_tokenize_with_cache(const ObExpr &expr,
                                              ObEvalCtx &ctx,
                                              common::ObArenaAllocator &allocator,
@@ -220,17 +198,27 @@ int ObExprTokenize::eval_tokenize_with_cache(const ObExpr &expr,
         param.parser_name_, static_cast<int64_t>(param.output_mode_), param.fulltext_, packed_res);
   }
   if (hit) {
-    if (OB_FAIL(pack_tokenized_result(expr, ctx, packed_res, expr_datum))) {
+    // replay the memoized raw json binary through the very same packing
+    // helper the uncached path uses, so the result is byte-identical
+    if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, expr_datum, packed_res))) {
     }
   } else if (OB_FAIL(tokenize_fulltext(param, param.output_mode_, allocator, json_result))) {
   } else if (OB_ISNULL(json_result)) {
     // matches ObJsonExprHelper::pack_json_res on a null json doc
     expr_datum.set_null();
   } else if (OB_FAIL(share::ObJsonWrapper::get_raw_binary(json_result, packed_res, &allocator))) {
-  } else if (OB_FAIL(pack_tokenized_result(expr, ctx, packed_res, expr_datum))) {
-  } else if (cacheable && packed_res.length() <= TOKENIZE_CACHE_RESULT_BUF) {
-    save_tokenize_cache(param.parser_name_, static_cast<int64_t>(param.output_mode_),
-                        param.fulltext_, packed_res);
+  } else {
+    if (cacheable && packed_res.length() <= TOKENIZE_CACHE_RESULT_BUF) {
+      save_tokenize_cache(param.parser_name_, static_cast<int64_t>(param.output_mode_),
+                          param.fulltext_, packed_res);
+    }
+    // pack exactly as the original code path does
+    if (OB_FAIL(ObJsonExprHelper::pack_json_res(expr,
+                                                ctx,
+                                                allocator,
+                                                json_result,
+                                                expr_datum))) {
+    }
   }
   return ret;
 }

@@ -110,11 +110,6 @@ private:
                                       ObDatum &expr_datum);
   // pack the raw json binary into the result datum, byte-identical to
   // ObJsonExprHelper::pack_json_str_res
-  static int pack_tokenized_result(const ObExpr &expr,
-                                   ObEvalCtx &ctx,
-                                   const common::ObString &packed_res,
-                                   ObDatum &expr_datum);
-
   static int construct_ft_parser_inner_name(const ObString &input_str, TokenizeParam &param);
 
 private:
