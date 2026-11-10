@@ -21,6 +21,9 @@
 #include "lib/charset/ob_charset.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/utility/alloc_assist.h"
+
+#include <stdlib.h>
+#include <string.h>
 #include "common/json_type/ob_json_base.h"
 #include "common/json_type/ob_json_tree.h"
 #include "lib/ob_errno.h"
@@ -47,12 +50,12 @@ namespace
 // pure function of (parser name, output mode, text) as long as no custom
 // parser properties are involved and the built-in dictionaries are used, so
 // the packed result bytes can be replayed verbatim on a repeat. Slots are
-// fixed-capacity POD buffers: no allocation on the hot path, entries evicted
-// round-robin. Oversized texts or results simply bypass the cache.
-constexpr int64_t TOKENIZE_CACHE_SLOT_CNT = 8;
+// fixed-capacity POD buffers, lazily allocated once per worker thread, entries
+// evicted round-robin. Oversized texts or results simply bypass the cache.
+constexpr int64_t TOKENIZE_CACHE_SLOT_CNT = 4;
 constexpr int64_t TOKENIZE_CACHE_PARSER_BUF = 128;
-constexpr int64_t TOKENIZE_CACHE_TEXT_BUF = 4096;
-constexpr int64_t TOKENIZE_CACHE_RESULT_BUF = 32768;
+constexpr int64_t TOKENIZE_CACHE_TEXT_BUF = 2048;
+constexpr int64_t TOKENIZE_CACHE_RESULT_BUF = 16384;
 
 struct TokenizeCacheEntry
 {
@@ -65,29 +68,27 @@ struct TokenizeCacheEntry
   char text_buf_[TOKENIZE_CACHE_TEXT_BUF];
   int64_t res_len_;
   char res_buf_[TOKENIZE_CACHE_RESULT_BUF];
-
-  TokenizeCacheEntry() { reset(); }
-  void reset()
-  {
-    in_use_ = false;
-    text_hash_ = 0;
-    output_mode_ = -1;
-    parser_len_ = 0;
-    text_len_ = 0;
-    res_len_ = 0;
-  }
 };
 
+// lazily allocated (~75KB per SQL worker thread, freed by the OS when the
+// long-lived worker exits); only a pointer occupies static TLS
 struct TokenizeCache
 {
-  TokenizeCacheEntry slots_[TOKENIZE_CACHE_SLOT_CNT];
+  TokenizeCacheEntry *slots_;
   int64_t next_victim_;
-  TokenizeCache() : next_victim_(0) {}
+  TokenizeCache() : slots_(nullptr), next_victim_(0) {}
 };
 
 TokenizeCache &get_tokenize_cache()
 {
   static thread_local TokenizeCache cache;
+  if (OB_ISNULL(cache.slots_)) {
+    cache.slots_ = static_cast<TokenizeCacheEntry *>(
+        malloc(sizeof(TokenizeCacheEntry) * TOKENIZE_CACHE_SLOT_CNT));
+    if (nullptr != cache.slots_) {
+      memset(cache.slots_, 0, sizeof(TokenizeCacheEntry) * TOKENIZE_CACHE_SLOT_CNT);
+    }
+  }
   return cache;
 }
 
@@ -97,6 +98,9 @@ bool lookup_tokenize_cache(const ObString &parser_name,
                            ObString &packed_res)
 {
   TokenizeCache &cache = get_tokenize_cache();
+  if (OB_ISNULL(cache.slots_)) {
+    return false;
+  }
   const uint64_t text_hash = common::murmurhash(
       text.ptr(), static_cast<int32_t>(text.length()), 0);
   for (int64_t i = 0; i < TOKENIZE_CACHE_SLOT_CNT; ++i) {
@@ -125,9 +129,12 @@ void save_tokenize_cache(const ObString &parser_name,
     return;
   }
   TokenizeCache &cache = get_tokenize_cache();
+  if (OB_ISNULL(cache.slots_)) {
+    return;
+  }
   TokenizeCacheEntry &entry = cache.slots_[cache.next_victim_];
   cache.next_victim_ = (cache.next_victim_ + 1) % TOKENIZE_CACHE_SLOT_CNT;
-  entry.reset();
+  memset(&entry, 0, sizeof(entry));
   entry.text_hash_ = common::murmurhash(
       text.ptr(), static_cast<int32_t>(text.length()), 0);
   entry.output_mode_ = output_mode;
