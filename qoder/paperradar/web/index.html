@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PaperRadar · 科研文献雷达</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="mark">PR</div>
+    <div>
+      <h1>PaperRadar</h1>
+      <p class="tagline">把读过的论文、写过的笔记，变成一条能查、能续、能推荐的检索链路</p>
+    </div>
+  </div>
+  <div class="status" id="status">
+    <span class="pill" id="pill-seekdb"><i class="dot"></i>seekdb</span>
+    <span class="pill" id="pill-pc"><i class="dot"></i>PowerContext</span>
+    <span class="pill ghost" id="pill-scope">scope —</span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-view="search">检索</button>
+  <button class="tab" data-view="radar">每日雷达</button>
+  <button class="tab" data-view="library">文献库</button>
+  <button class="tab" data-view="evidence">技术证据</button>
+</nav>
+
+<main class="layout">
+  <section class="main-col">
+
+    <!-- 检索 -->
+    <div class="view active" id="view-search">
+      <div class="searchbox card">
+        <div class="searchrow">
+          <input id="q" type="text" placeholder="用一句话描述你要找的东西，例如：长文档切分粒度怎么选 / 混合检索为什么比纯向量稳"
+                 value="长文档切分粒度到底怎么选？" />
+          <button id="btn-search" class="primary">检索</button>
+        </div>
+        <div class="searchmeta">
+          <div class="segmented" id="mode">
+            <button data-mode="hybrid" class="on">混合检索</button>
+            <button data-mode="vector">仅向量</button>
+            <button data-mode="keyword">仅全文</button>
+          </div>
+          <div class="filters">
+            <label>年份 <input id="year-from" type="number" placeholder="起" /></label>
+            <label>到 <input id="year-to" type="number" placeholder="止" /></label>
+            <label>类型
+              <select id="kind">
+                <option value="">全部</option>
+                <option value="paper">论文</option>
+                <option value="note">我的笔记</option>
+              </select>
+            </label>
+            <label>状态
+              <select id="status-filter">
+                <option value="">全部</option>
+                <option value="unread">未读</option>
+                <option value="reading">在读</option>
+                <option value="read">已读</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="hint" id="search-hint">混合检索会把全文条件、结构化过滤和向量近邻排序放进同一条 SQL，由 seekdb 一次完成。</div>
+      </div>
+
+      <div id="results" class="results"></div>
+    </div>
+
+    <!-- 每日雷达 -->
+    <div class="view" id="view-radar">
+      <div class="card radar-head">
+        <div>
+          <h2>每日雷达</h2>
+          <p class="muted" id="radar-sub">用你的研究画像去召回库里的未读文献，并说明为什么推给你。</p>
+        </div>
+        <button id="btn-radar" class="primary ghost-btn">刷新推荐</button>
+      </div>
+      <div id="radar-list" class="results"></div>
+    </div>
+
+    <!-- 文献库 -->
+    <div class="view" id="view-library">
+      <div class="card library-head">
+        <h2>文献库</h2>
+        <p class="muted">共 <b id="lib-total">0</b> 篇文献与笔记，阅读状态由 PowerContext 记忆维护。</p>
+      </div>
+      <div id="library-list" class="library"></div>
+    </div>
+
+    <!-- 技术证据 -->
+    <div class="view" id="view-evidence">
+      <div class="card">
+        <h2>seekdb：检索记录（可回放）</h2>
+        <p class="muted">每一次检索都把真实执行的 SQL、候选数、耗时写进 <code>search_log</code> 表。</p>
+        <div id="evidence-searches" class="evidence"></div>
+      </div>
+      <div class="card">
+        <h2>PowerContext：记忆读写</h2>
+        <p class="muted">画像、阅读进度、检索结论都以原子记忆写入，带 revision，可追溯。</p>
+        <div id="evidence-memory" class="evidence"></div>
+      </div>
+      <div class="card">
+        <h2>核心 SQL</h2>
+        <div id="evidence-sql" class="evidence"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side-col">
+    <div class="card profile">
+      <div class="card-head">
+        <h2>研究画像</h2>
+        <span class="pill ghost" id="profile-source">memory</span>
+      </div>
+      <label class="field">研究方向
+        <input id="p-direction" type="text" />
+      </label>
+      <label class="field">关注点（逗号分隔）
+        <input id="p-focus" type="text" />
+      </label>
+      <label class="check"><input id="p-unread" type="checkbox" /> 推荐时优先未读</label>
+      <button id="btn-save-profile" class="primary small">保存到记忆</button>
+      <p class="tiny" id="profile-hint">保存后，检索排序与每日雷达都会读到这份画像。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>上次在查什么</h2></div>
+      <ul class="notes" id="recent-notes"><li class="muted tiny">暂无记录</li></ul>
+    </div>
+
+    <div class="card stats">
+      <div class="card-head"><h2>库内统计</h2></div>
+      <div class="statgrid">
+        <div><b id="s-docs">0</b><span>文献</span></div>
+        <div><b id="s-chunks">0</b><span>片段</span></div>
+        <div><b id="s-searches">0</b><span>检索</span></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

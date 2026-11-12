@@ -1,0 +1,303 @@
+{
+  "corpus_version": "1.0",
+  "note": "示例语料：条目为公开论文（arXiv / 会议）的摘要与要点改写，用于演示检索流程，非原文引用。可替换为自己的文献。",
+  "papers": [
+    {
+      "id": "p_rag_2020",
+      "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+      "authors": "Patrick Lewis, Ethan Perez, Aleksandra Piktus, et al.",
+      "venue": "NeurIPS",
+      "year": 2020,
+      "tags": "RAG,检索增强,生成,参数化记忆",
+      "url": "https://arxiv.org/abs/2005.11401",
+      "abstract": "提出 RAG：把预训练的 seq2seq 生成模型与稠密向量检索器结合，用非参数化的外部文档索引补充模型内部的参数化记忆，在开放域问答等知识密集型任务上取得更好的事实性。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "纯参数化的大模型把知识压缩在权重里，难以更新、难以追溯出处，且在长尾事实上容易产生幻觉。论文要回答的是：能否让生成模型在推理时访问一个可替换、可更新的外部知识索引。"
+        },
+        {
+          "section": "方法",
+          "page": 2,
+          "text": "RAG 使用 DPR 作为检索器，把 Wikipedia 切分为 100 词的段落块（chunk）建立向量索引；生成端使用 BART。训练时联合优化检索器与生成器，采用 RAG-Sequence 与 RAG-Token 两种边缘化方式把 top-k 文档的似然融合进解码过程。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 9,
+          "text": "在 Natural Questions、TriviaQA、WebQuestions 上刷新了开放域问答的结果，生成内容更具体、更事实。局限在于：检索质量是瓶颈，chunk 切分粒度固定，跨段落、需要多跳推理的问题仍然困难；索引更新需要重建嵌入。"
+        }
+      ]
+    },
+    {
+      "id": "p_dpr_2020",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "authors": "Vladimir Karpukhin, Barlas Oguz, Sewon Min, et al.",
+      "venue": "EMNLP",
+      "year": 2020,
+      "tags": "稠密检索,双塔,负采样,向量检索",
+      "url": "https://arxiv.org/abs/2004.04906",
+      "abstract": "用双塔（dual-encoder）把问题和段落映射到同一向量空间，仅用少量问答对训练即可显著超过 BM25 的检索效果，成为后续 RAG 系统的标准检索器。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "BM25 依赖词面匹配，无法处理同义改写与语义相似但用词不同的情况。论文追问：只用几千条问答对，能否训练出比 BM25 更好的稠密检索器。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "问题编码器与段落编码器分别是两个 BERT，用点积作为相似度，训练目标是 in-batch negatives 加一个 BM25 硬负例。推理时用 FAISS 做最大内积搜索（MIPS），把检索做成一次向量近邻查询。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 8,
+          "text": "Top-20 检索准确率相对 BM25 提升约 9 到 19 个百分点，且无需 BM25 预过滤。局限是：领域迁移时效果下降明显，负例构造对结果影响很大，纯语义检索对专有名词、编号、精确短语的匹配反而不如关键词检索。"
+        }
+      ]
+    },
+    {
+      "id": "p_colbert_2020",
+      "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+      "authors": "Omar Khattab, Matei Zaharia",
+      "venue": "SIGIR",
+      "year": 2020,
+      "tags": "迟交互,token级匹配,重排,检索",
+      "url": "https://arxiv.org/abs/2004.12832",
+      "abstract": "提出 late interaction：查询与文档各自编码为 token 向量序列，用 MaxSim 在 token 级别做细粒度匹配，兼顾 BERT 的精度与向量检索的效率。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "把整段文本压成单个向量会丢失细粒度信息，而让 BERT 对每个查询-文档对做全交叉编码又太慢。论文希望找到精度与延迟之间的中间方案。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "每个 token 输出一个上下文向量并做维度压缩；相关性得分是查询每个 token 与文档所有 token 的最大相似度之和（MaxSim）。索引阶段离线预计算文档 token 向量，在线只编码查询，再用向量索引做候选召回。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 7,
+          "text": "在 MS MARCO 与 TREC 上效果优于单向量双塔，延迟比全交叉编码低两个数量级。局限是存储开销大：一篇文档要存几百个向量，索引体积显著增加。"
+        }
+      ]
+    },
+    {
+      "id": "p_hyde_2023",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE)",
+      "authors": "Luyu Gao, Xueguang Ma, Jimmy Lin, Jamie Callan",
+      "venue": "ACL",
+      "year": 2023,
+      "tags": "零样本,查询改写,假设文档,稠密检索",
+      "url": "https://arxiv.org/abs/2212.10496",
+      "abstract": "先让大模型针对问题生成一段假设性的答案文档，再对该假设文档做向量检索。用生成内容填补查询与文档之间的语义鸿沟，无需任何相关性标注。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "无标注场景下，稠密检索器在分布外任务上退化严重。查询很短、文档很长，两者在向量空间中的形态差异导致召回不准。"
+        },
+        {
+          "section": "方法",
+          "page": 2,
+          "text": "HyDE 用指令模型生成 hypothetical document，再交给无监督对比编码器编码成向量，用该向量做近邻搜索。核心假设是：假设文档即使事实错误，其向量位置也落在真实文档附近的同一语义邻域。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 8,
+          "text": "在 WebQA、ARC、MultiQA 等零样本任务上优于微调过的稠密检索器，且与 BM25 组合后更稳。局限是额外一次生成带来延迟与成本，且生成内容可能把检索带偏。"
+        }
+      ]
+    },
+    {
+      "id": "p_selfrag_2024",
+      "title": "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",
+      "authors": "Akari Asai, Zeqiu Wu, Yizhong Wang, et al.",
+      "venue": "ICLR",
+      "year": 2024,
+      "tags": "自适应检索,自我反思,幻觉,评测",
+      "url": "https://arxiv.org/abs/2310.11511",
+      "abstract": "让模型自己决定是否需要检索，并用反思 token 评价检索内容的相关性与生成内容的支持度，从而在事实性与流畅性之间自适应权衡。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "固定每次都检索会引入无关段落，反而干扰生成；完全不检索又容易幻觉。论文希望模型具备判断「何时检索、检索到的有没有用、生成的是否被证据支持」的能力。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "训练数据由 GPT-4 标注，插入四类反思 token：是否需要检索、段落是否相关、生成是否被支持、整体是否有用。推理时用这些 token 的概率做加权或阈值控制，支持多段并行检索后择优。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 10,
+          "text": "在 PubHealth、ARC 等任务上事实性与引用准确性同时提升，长文本生成更可靠。局限是训练依赖强模型标注，反思 token 的校准在不同领域间不稳定。"
+        }
+      ]
+    },
+    {
+      "id": "p_lostmiddle_2024",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "authors": "Nelson F. Liu, Kevin Lin, John Hewitt, et al.",
+      "venue": "TACL",
+      "year": 2024,
+      "tags": "长上下文,位置偏差,评测,上下文组织",
+      "url": "https://arxiv.org/abs/2307.03172",
+      "abstract": "系统评测发现：当关键信息位于长上下文中部时，模型利用率显著下降，性能呈 U 形曲线。增加上下文长度并不等于更好地使用上下文。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "把更多文档塞进上下文窗口是否就能解决检索问答？论文构造多文档问答与键值检索实验，控制证据出现的位置，测量模型的利用能力。"
+        },
+        {
+          "section": "方法",
+          "page": 4,
+          "text": "把 gold 段落放在上下文的开头、中间、结尾等不同位置，比较准确率；同时变化干扰段落的数量。实验覆盖 GPT-3.5、Claude、LongChat 等模型。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 12,
+          "text": "证据在开头或结尾时表现最好，在中间时最差，且随上下文变长而恶化。实践启示：检索结果要少而准，并做重排与位置安排；「堆上下文」不是免费的。"
+        }
+      ]
+    },
+    {
+      "id": "p_raptor_2024",
+      "title": "RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval",
+      "authors": "Parth Sarthi, Salman Abdullah, Aditi Tuli, et al.",
+      "venue": "ICLR",
+      "year": 2024,
+      "tags": "层次索引,摘要树,长文档,递归聚类",
+      "url": "https://arxiv.org/abs/2401.18059",
+      "abstract": "对文本块递归聚类并生成多级摘要，构建一棵摘要树，检索时同时在不同抽象层级上召回，使系统既能取到细节片段也能取到全局概括。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "扁平 chunk 索引只能召回局部片段，回答「整篇论文的主要贡献是什么」这类全局问题时会失败，因为答案分散在全文而非某一段。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "用软聚类（GMM + UMAP）对 chunk 向量分组，每组用模型生成摘要，摘要再编码、再聚类，递归直到形成根节点。检索时把树节点与叶子一起放进向量索引，按查询做层次召回。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 9,
+          "text": "在 NarrativeQA、QASPER 等长文档问答上提升明显。局限是建索引成本高、依赖生成模型质量，且树结构需要随文档更新而重建。"
+        }
+      ]
+    },
+    {
+      "id": "p_graphrag_2024",
+      "title": "From Local to Global: A Graph RAG Approach to Query-Focused Summarization",
+      "authors": "Darren Edge, Ha Trinh, Newman Cheng, et al.",
+      "venue": "arXiv",
+      "year": 2024,
+      "tags": "GraphRAG,知识图谱,社区摘要,全局问答",
+      "url": "https://arxiv.org/abs/2404.16130",
+      "abstract": "先用大模型从语料抽取实体与关系构建知识图谱，再对图做社区划分并为每个社区生成摘要，回答全局性问题时用社区摘要做分层聚合。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "向量检索擅长定位局部事实，但面对「这批文献整体上有哪些争议」这类需要跨文档汇总的问题时，top-k 检索无法覆盖全局。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "抽实体与关系建图，用 Leiden 算法做多层次社区发现，对每个社区生成摘要。查询时 map-reduce：各社区摘要分别产出要点，再归并成最终答案。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 8,
+          "text": "在全局性、综合性问题上明显优于朴素 RAG，答案覆盖面更全。局限是索引成本极高（需要大量 LLM 调用），抽取质量依赖模型，且更新代价大。"
+        }
+      ]
+    },
+    {
+      "id": "p_beir_2021",
+      "title": "BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models",
+      "authors": "Nandan Thakur, Nils Reimers, Andreas Rücklé, et al.",
+      "venue": "NeurIPS",
+      "year": 2021,
+      "tags": "评测基准,零样本,BM25,鲁棒性",
+      "url": "https://arxiv.org/abs/2104.08663",
+      "abstract": "构建覆盖 18 个数据集、9 类任务的异构检索评测集，发现稠密检索器在域外任务上常常不如 BM25，说明鲁棒性远比单一榜单成绩重要。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "MS MARCO 上的排名能否代表真实场景？论文要在多个领域、多种任务形态上做零样本评测，检验检索模型的泛化能力。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "统一 18 个数据集的格式与评测协议（nDCG@10 为主），在同一套硬件与编码方式下对比 BM25、DPR、ColBERT、Sentence-BERT 等方法。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 11,
+          "text": "BM25 是极强的基线，在域外场景常常击败稠密检索；混合检索（稀疏 + 稠密）更稳健。实践启示：不要只看单一数据集，要用混合方案加领域评测。"
+        }
+      ]
+    },
+    {
+      "id": "p_densex_2023",
+      "title": "Dense X Retrieval: What Retrieval Granularity Should We Use?",
+      "authors": "Tong Chen, Hongwei Wang, Sihao Chen, et al.",
+      "venue": "EMNLP",
+      "year": 2023,
+      "tags": "切分粒度,命题,chunk,检索单元",
+      "url": "https://arxiv.org/abs/2312.06648",
+      "abstract": "提出以「命题（proposition）」作为检索单元：把段落拆成自包含的最小事实陈述并建立索引，比固定长度 chunk 检索更精准，也更容易被生成模型直接使用。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "chunk 的粒度是被忽视的变量：太长会混入无关内容、稀释向量；太短会丢失上下文、指代不清。论文要回答「什么样的检索单元最合适」。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "用模型把段落改写成一组独立可读的命题句，每条只表达一个事实，不含代词指代；对比 passage、sentence、proposition 三种粒度在问答与事实核查上的召回与下游效果。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 9,
+          "text": "命题级索引在检索精度与下游问答上均优于固定窗口 chunk，且召回单元更短、更易塞进上下文。局限是切分过程依赖模型、成本高，且对叙述性、流程性文本不友好。"
+        }
+      ]
+    },
+    {
+      "id": "p_adaptive_2024",
+      "title": "Adaptive-RAG: Learning to Adapt Retrieval-Augmented Large Language Models through Question Complexity",
+      "authors": "Soyeong Jeong, Jinheon Baek, Sukmin Cho, et al.",
+      "venue": "NAACL",
+      "year": 2024,
+      "tags": "查询路由,复杂度分类,自适应,效率",
+      "url": "https://arxiv.org/abs/2403.14403",
+      "abstract": "训练一个分类器判断问题复杂度，据此在「不检索、单步检索、多步迭代检索」之间路由，在保证效果的同时降低不必要的检索开销。",
+      "sections": [
+        {
+          "section": "研究问题",
+          "page": 1,
+          "text": "所有问题都走同一套重检索流程既慢又可能引入噪声，但简单问题也做多跳检索是浪费。需要一个按难度分配算力的调度器。"
+        },
+        {
+          "section": "方法",
+          "page": 3,
+          "text": "用较小的语言模型作为复杂度分类器（零样本先验 + 少量标注微调），输出 A/B/C 三档：直接生成、单次检索、多步迭代检索。多步分支用查询改写串起多轮检索。"
+        },
+        {
+          "section": "结论与局限",
+          "page": 7,
+          "text": "在多个单跳与多跳问答数据集上取得与重型流程相当的效果，平均检索次数明显下降。局限是分类器误判会带来连锁误差，跨领域时需要重新校准。"
+        }
+      ]
+    }
+  ]
+}
