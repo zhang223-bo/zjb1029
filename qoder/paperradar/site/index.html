@@ -59,6 +59,8 @@
   .pill { font-size: 13px; background: #fff; border: 1px solid var(--line); border-radius: 999px;
     padding: 6px 14px; color: var(--muted); }
   .pill b { color: var(--ink); }
+  .repo-link { color: var(--accent, #2563eb); text-decoration: none; font-weight: 600; }
+  .repo-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -81,6 +83,7 @@
      它用 seekdb 的混合检索把「查文献」变成一句话的事，用 PowerContext 把「你的研究方向和阅读进度」变成越用越准的记忆。</p>
   <div class="btns">
     <a class="btn primary" href="#features">了解核心功能</a>
+    <a class="btn ghost" href="https://github.com/zhang223-bo/zjb1029/tree/2026-competition-ecosystem/qoder/paperradar" target="_blank" rel="noreferrer">代码仓库</a>
     <a class="btn ghost" href="#run">本地跑起来</a>
   </div>
   <div class="pill-row">
@@ -138,7 +141,7 @@ python scripts/smoke_test.py                # 6. 端到端自检（10 项全 PAS
 <section id="repo" class="wrap">
   <h2>代码与材料</h2>
   <div class="cards">
-    <div class="card"><h3>代码仓库</h3><p>oceanbase/powercontext 私有导入分支 <code>2026-competition-ecosystem</code>，项目资产位于 <code>qoder/paperradar/</code>。</p></div>
+    <div class="card"><h3>代码仓库</h3><p>团队私有仓库（已向评审开放）分支 <code>2026-competition-ecosystem</code>，项目资产位于 <code>qoder/paperradar/</code>。<br><a class="repo-link" href="https://github.com/zhang223-bo/zjb1029/tree/2026-competition-ecosystem/qoder/paperradar" target="_blank" rel="noreferrer">→ 查看源码目录</a></p></div>
     <div class="card"><h3>验证样例</h3><p>三组可执行样例（混合检索对比 / 记忆读写复用 / 画像影响排序），见 <code>docs/VERIFY.md</code>。</p></div>
     <div class="card"><h3>Qoder 开发记录</h3><p>需求拆解、方案确认、编码、调试、发布各环节的会话记录与 commit 对应，见 <code>docs/QODER_LOG.md</code>。</p></div>
   </div>
