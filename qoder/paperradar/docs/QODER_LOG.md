@@ -5,10 +5,11 @@
 
 ## 基本信息
 
-- Qoder 账号 UID：`（提交时填写）`
-- 开发环境：Qoder 桌面端 / IDE（勾选实际使用的）
-- 仓库：`oceanbase/powercontext` 私有导入分支 `2026-competition-ecosystem`
+- Qoder 账号 UID：`（提交时填写：Qoder 设置 → 个人资料 → 编辑）`
+- 开发环境：Qoder CLI `1.1.87`（Windows），项目网站由此 CLI 的 Sites 能力发布；开发过程另有 Qoder 会话记录
+- 仓库：团队私有仓库 `zhang223-bo/zjb1029` 分支 `2026-competition-ecosystem`
 - 项目资产路径：`qoder/paperradar/`
+- 项目网站：https://paperradar-sbpysfqzwno.qoder.website （可见范围：任何人都可访问）
 
 ## 开发过程（按环节）
 
@@ -37,7 +38,9 @@
 ### 5. 发布
 
 - 项目网站通过 Qoder Sites 发布，可见范围设为「任何人都可访问」。
-- 站点地址：`（提交时填写 Qoder Sites URL）`
+- 站点地址：https://paperradar-sbpysfqzwno.qoder.website
+- 发布方式：Qoder CLI `1.1.87` 的 Sites 能力（`prepare_site` 打包上传静态产物 → `publish_site` 上线 → 访问策略设为 public），站点项目名「PaperRadar 科研文献雷达」，地址前缀 `paperradar`（平台自动追加唯一后缀）。
+- 发布后已在无登录状态下验证：首页 `200`、三张演示截图 `200`、标题与仓库链接正常。
 
 ## Qoder 使用统计
 

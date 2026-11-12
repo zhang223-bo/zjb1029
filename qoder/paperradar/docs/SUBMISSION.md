@@ -4,12 +4,20 @@
 
 | 材料 | 要求 | 状态 | 位置 |
 | --- | --- | --- | --- |
-| 项目网站网址 | Qoder Sites 发布，可见范围「任何人都可访问」 | 待发布 | 在 Qoder 中用 `site/` 目录（或由 Qoder 直接托管本应用）创建站点后填写 |
-| 代码仓库 | 完整源码，公开或对评审开放 | 就绪 | 本仓库分支 `2026-competition-ecosystem` 的 `qoder/paperradar/` |
+| 项目网站网址 | Qoder Sites 发布，可见范围「任何人都可访问」 | 就绪 | https://paperradar-sbpysfqzwno.qoder.website |
+| 代码仓库 | 完整源码，公开或对评审开放 | 就绪 | 团队仓库 `zhang223-bo/zjb1029` 分支 `2026-competition-ecosystem` 的 `qoder/paperradar/` |
 | 运行说明 | 环境、依赖、部署接入方式、完整步骤 | 就绪 | [RUNBOOK.md](RUNBOOK.md) |
 | 验证样例 | 初始数据、输入、步骤、预期结果、技术作用记录 | 就绪 | [VERIFY.md](VERIFY.md) |
 | Qoder 开发记录 | 关键环节截图/录屏 + 账号 UID | 待补充 | [QODER_LOG.md](QODER_LOG.md) |
 | 使用效果材料 | 鼓励提交：使用人数、提效对比、反馈 | 待补充 | 使用后补充访问统计截图、问卷结果 |
+
+## 提交平台表单填写值
+
+| 字段 | 值 |
+| --- | --- |
+| Branch | `2026-competition-ecosystem` |
+| Commit id | 该分支最新提交（`git rev-parse 2026-competition-ecosystem`），以提交当天远端 HEAD 为准 |
+| 作品链接 | https://paperradar-sbpysfqzwno.qoder.website |
 
 ## 提交前检查
 
