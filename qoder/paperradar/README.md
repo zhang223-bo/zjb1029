@@ -43,6 +43,17 @@ PaperRadar 面向科研人员和研究生的一个真实痛点：资料散落在
 
 ## 快速开始
 
+**最短路径（推荐评审用）**：两条命令。
+
+```bash
+pip install -r requirements.txt
+python run.py                    # 体检 + 自动拉起 seekdb + 建表入库 + 启动，浏览器开 http://127.0.0.1:8099
+```
+
+`run.py` 会依次做：检查依赖 → 若 2881 端口没监听则用本机 seekdb 自动启动 → 建表 → 索引为空时自动切块入库 → 检测 PowerContext → 启动服务。只想体检不启动用 `python run.py --check`。Windows 也可直接双击 `start.bat`。
+
+**完整手动流程**（需要自己控制每个组件时）：
+
 ```bash
 # 1. 启动 seekdb（任选其一）
 seekdb --port 2881                    # 本地安装版
@@ -64,6 +75,8 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 8099
 python scripts/smoke_test.py
 ```
 
+> PowerContext 没启动时，检索、文献库、证据页仍可正常使用，只有「记忆加权 / 阅读进度 / 每日雷达」降级，界面上会显示 `degraded` 提示。
+
 详细步骤、各平台差异与常见问题见 [docs/RUNBOOK.md](docs/RUNBOOK.md)；验收用的验证样例见 [docs/VERIFY.md](docs/VERIFY.md)。
 
 ## 目录结构
@@ -80,6 +93,8 @@ backend/
   main.py        FastAPI 接口
 web/             前端（原生 HTML/CSS/JS，无构建步骤）
 data/            示例语料（论文摘要改写 + 个人笔记）
+run.py           一键启动（环境体检 + 自动拉起 seekdb + 建表入库 + 起服务）
+start.bat        Windows 双击启动
 scripts/         bootstrap.py（初始化）、smoke_test.py（自检）
 site/            项目网站（Qoder Sites 发布用）
 docs/            运行说明、验证样例、开发记录、提交清单

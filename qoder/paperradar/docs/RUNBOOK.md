@@ -13,6 +13,24 @@
 
 磁盘：首次运行会下载约 87MB 的本地嵌入模型（ONNX，all-MiniLM-L6-v2），缓存到 `~/.cache/pyseekdb/`。
 
+## 0.1 最快路径（不想逐个装组件就看这里）
+
+本机已装 seekdb 的前提下，两条命令即可：
+
+```bash
+pip install -r requirements.txt
+python run.py
+```
+
+`run.py` 自动完成：依赖检查 → 2881 端口无监听时用本机 seekdb 拉起实例（数据目录 `data/seekdb/`）→ 建表 → 索引为空时切块入库 → 检测 PowerContext → 启动服务。
+
+- `python run.py --check`：只体检，不启动
+- `python run.py --port 8100`：换端口
+- `python run.py --reingest`：强制重建索引
+- Windows 也可双击 `start.bat`
+
+只有 PowerContext 需要手动装（它是独立服务，`run.py` 只做检测并在缺失时提示降级）。装好 PowerContext 后 `python run.py` 会把整条链路都拉起来。
+
 ## 1. 启动 seekdb
 
 任选其一：

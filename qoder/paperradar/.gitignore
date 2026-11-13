@@ -7,6 +7,9 @@ __pycache__/
 logs/
 *.log
 
+# run.py 自动拉起的本地 seekdb 实例数据目录
+data/seekdb/
+
 # Qoder Sites 发布产物（构建输出与本地站点绑定描述）
 dist/
 *.qoder.site
